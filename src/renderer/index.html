@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self';"
+    />
+    <title>IPCheck</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">IP</span>
+        <div>
+          <h1>IPCheck</h1>
+          <p class="brand-sub">Proxy quality via iphub.info</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div id="ownIp" class="own-ip" title="Your IP without a proxy">
+          <span class="own-ip-label">Your IP</span>
+          <span class="own-ip-value" id="ownIpValue">—</span>
+        </div>
+        <button id="btnOwnIp" class="btn btn-ghost">Check my IP</button>
+        <button id="btnSettings" class="btn btn-ghost">Settings</button>
+      </div>
+    </header>
+
+    <!-- Settings drawer -->
+    <section id="settingsPanel" class="settings hidden">
+      <div class="settings-grid">
+        <label class="field field-wide">
+          <span class="field-label">
+            iphub.info API key
+            <a href="#" id="linkKey" class="link">get a free key</a>
+          </span>
+          <input id="apiKey" type="password" placeholder="X-Key from iphub.info" spellcheck="false" />
+          <span class="field-hint">
+            <strong>Required.</strong> iphub.info is a client-rendered site and its old public IP
+            page is gone, so the block status can only come from the API. The free tier covers
+            1000 lookups/day, which is plenty for checking a proxy list.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Concurrency</span>
+          <input id="concurrency" type="number" min="1" max="50" />
+          <span class="field-hint">Parallel checks (1–50).</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Timeout (ms)</span>
+          <input id="timeoutMs" type="number" min="2000" max="120000" step="1000" />
+          <span class="field-hint">Per request (2000–120000).</span>
+        </label>
+      </div>
+      <div class="settings-foot">
+        <span id="settingsSaved" class="saved-flag"></span>
+        <button id="btnSaveSettings" class="btn btn-primary">Save settings</button>
+      </div>
+    </section>
+
+    <div id="keyBanner" class="banner hidden">
+      <span class="banner-icon">!</span>
+      <div class="banner-body">
+        <strong>No iphub.info API key set.</strong>
+        Proxies will still be tested for reachability and exit IP, but they cannot be scored
+        without a key.
+      </div>
+      <button id="btnBannerKey" class="btn btn-primary">Add key</button>
+    </div>
+
+    <div id="tierBanner" class="banner banner-info hidden">
+      <span class="banner-icon banner-icon-info">i</span>
+      <div class="banner-body">
+        <strong>Scored on the Basic tier.</strong>
+        Residential proxies are not detected on this plan and report as <code>block 0</code>, so
+        “Good” here means “not a datacenter IP, Tor exit or commercial VPN” — not “not a proxy”.
+        Click an exit IP to check it on iphub.info, which shows Professional-tier detection.
+      </div>
+      <button id="btnTierDismiss" class="btn btn-ghost">Dismiss</button>
+    </div>
+
+    <main class="layout">
+      <!-- Input side -->
+      <aside class="panel input-panel">
+        <div class="panel-head">
+          <h2>Proxy list</h2>
+          <span id="parseInfo" class="parse-info">0 proxies</span>
+        </div>
+
+        <textarea
+          id="proxyInput"
+          spellcheck="false"
+          placeholder="One proxy per line. Accepted formats:&#10;&#10;1.2.3.4:8080&#10;1.2.3.4:8080:user:pass&#10;user:pass@1.2.3.4:8080&#10;socks5://user:pass@1.2.3.4:1080"
+        ></textarea>
+
+        <div id="parseErrors" class="parse-errors hidden"></div>
+
+        <div class="control-row">
+          <label class="field field-inline">
+            <span class="field-label">Default protocol</span>
+            <select id="defaultScheme">
+              <option value="http">HTTP / HTTPS</option>
+              <option value="socks5">SOCKS5</option>
+              <option value="socks4">SOCKS4</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Used only for lines without an explicit <code>scheme://</code> prefix.</p>
+
+        <div class="button-row">
+          <button id="btnCheck" class="btn btn-primary btn-lg">Check proxies</button>
+          <button id="btnStop" class="btn btn-danger btn-lg hidden">Stop</button>
+        </div>
+        <div class="button-row">
+          <button id="btnImport" class="btn btn-ghost">Import file</button>
+          <button id="btnClear" class="btn btn-ghost">Clear</button>
+        </div>
+
+        <div id="progressWrap" class="progress-wrap hidden">
+          <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+          <span id="progressText" class="progress-text">0 / 0</span>
+        </div>
+      </aside>
+
+      <!-- Results side -->
+      <section class="panel results-panel">
+        <div class="stats" id="stats">
+          <button class="stat stat-all is-active" data-filter="all">
+            <span class="stat-value" id="statTotal">0</span>
+            <span class="stat-label">Total</span>
+          </button>
+          <button class="stat stat-good" data-filter="good">
+            <span class="stat-value" id="statGood">0</span>
+            <span class="stat-label">Good (0)</span>
+          </button>
+          <button class="stat stat-warn" data-filter="warn">
+            <span class="stat-value" id="statWarn">0</span>
+            <span class="stat-label">Risky (2)</span>
+          </button>
+          <button class="stat stat-bad" data-filter="bad">
+            <span class="stat-value" id="statBad">0</span>
+            <span class="stat-label">Blocked (1)</span>
+          </button>
+          <button class="stat stat-error" data-filter="error">
+            <span class="stat-value" id="statError">0</span>
+            <span class="stat-label">Failed</span>
+          </button>
+        </div>
+
+        <div class="results-toolbar">
+          <input id="search" type="search" placeholder="Filter by IP, country, ISP…" spellcheck="false" />
+          <div class="toolbar-actions">
+            <button id="btnCopyGood" class="btn btn-ghost">Copy good</button>
+            <button id="btnExportCsv" class="btn btn-ghost">Export CSV</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="results">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th>Proxy</th>
+                <th>Exit IP</th>
+                <th class="col-block">Block</th>
+                <th>Country</th>
+                <th>ISP / ASN</th>
+                <th class="col-ms">Latency</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+
+          <div id="emptyState" class="empty-state">
+            <p class="empty-title">No results yet</p>
+            <p class="empty-sub">
+              Paste your proxy-seller list on the left and hit <strong>Check proxies</strong>.
+            </p>
+            <ul class="legend">
+              <li><span class="dot dot-good"></span><strong>block 0</strong> — residential or business IP. Safe.</li>
+              <li><span class="dot dot-warn"></span><strong>block 2</strong> — suspicious, lower confidence.</li>
+              <li><span class="dot dot-bad"></span><strong>block 1</strong> — hosting provider or proxy. Commonly blocked.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Embedded iphub.info viewer. The native view is positioned over
+           #viewerSurface by the main process. -->
+      <aside id="viewerPane" class="viewer hidden">
+        <div class="viewer-head">
+          <div class="viewer-titles">
+            <span class="viewer-title">iphub.info</span>
+            <span id="viewerUrl" class="viewer-url">—</span>
+          </div>
+          <div class="viewer-actions">
+            <button id="viewerBack" class="btn btn-ghost" title="Back">←</button>
+            <button id="viewerReload" class="btn btn-ghost" title="Reload">↻</button>
+            <button id="viewerExternal" class="btn btn-ghost" title="Open in your browser">↗</button>
+            <button id="viewerClose" class="btn btn-ghost" title="Close panel">✕</button>
+          </div>
+        </div>
+        <div id="viewerSurface" class="viewer-surface">
+          <span id="viewerLoading" class="viewer-loading">Loading…</span>
+        </div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

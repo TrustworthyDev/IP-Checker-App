@@ -1,0 +1,45 @@
+{
+  "name": "ipcheck",
+  "version": "1.0.0",
+  "description": "Desktop app to check proxy IPs against iphub.info (proxy quality / block score checker)",
+  "main": "src/main/main.js",
+  "author": "Hayashi Benjiro",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win --x64 --config.electronDist=node_modules/electron/dist",
+    "pack": "electron-builder --dir --config.electronDist=node_modules/electron/dist"
+  },
+  "build": {
+    "appId": "com.ipcheck.app",
+    "productName": "IPCheck",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "axios": "^1.19.0",
+    "https-proxy-agent": "^9.1.0",
+    "socks-proxy-agent": "^10.1.0"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  }
+}
