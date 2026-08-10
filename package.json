@@ -1,5 +1,5 @@
 {
-  "name": "ipcheck",
+  "name": "ipchecker",
   "version": "1.0.0",
   "description": "Desktop app to check proxy IPs against iphub.info (proxy quality / block score checker)",
   "main": "src/main/main.js",
@@ -13,8 +13,8 @@
     "pack": "electron-builder --dir --config.electronDist=node_modules/electron/dist"
   },
   "build": {
-    "appId": "com.ipcheck.app",
-    "productName": "IPCheck",
+    "appId": "com.ipchecker.app",
+    "productName": "IPChecker",
     "directories": {
       "output": "release"
     },
@@ -23,6 +23,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "src/assets/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -30,7 +31,9 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "src/assets/icon.ico",
+      "uninstallerIcon": "src/assets/icon.ico"
     }
   },
   "dependencies": {

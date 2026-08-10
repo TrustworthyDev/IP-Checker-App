@@ -20,7 +20,8 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#0f1218',
     show: false,
-    title: 'IPCheck — proxy quality via iphub.info',
+    title: 'IPChecker — proxy quality via iphub.info',
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
