@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('shell:open', url),
 
   // Embedded iphub.info viewer (user-driven; read by a person, not the app).
-  openViewer: (url, bounds) => ipcRenderer.invoke('viewer:open', { url, bounds }),
+  lookupInViewer: (ip, bounds) => ipcRenderer.invoke('viewer:lookup', { ip, bounds }),
   setViewerBounds: (bounds) => ipcRenderer.invoke('viewer:bounds', bounds),
   reloadViewer: () => ipcRenderer.invoke('viewer:reload'),
   viewerBack: () => ipcRenderer.invoke('viewer:back'),

@@ -705,17 +705,22 @@ function viewerBounds() {
   return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
 }
 
+/**
+ * Clicking an IP hands it to the panel. Only the first click pays for a page
+ * load -- after that the main process types the address into iphub's own
+ * lookup box and presses the button, so the panel stays put.
+ */
 function openViewer(ip) {
+  const firstOpen = el.viewerPane.classList.contains('hidden');
+
   el.viewerPane.classList.remove('hidden');
   el.layout.classList.add('with-viewer');
-  el.viewerLoading.classList.remove('hidden');
-
-  const url = `https://iphub.info/?ip=${encodeURIComponent(ip)}`;
-  el.viewerUrl.textContent = url;
+  if (firstOpen) el.viewerLoading.classList.remove('hidden');
+  el.viewerUrl.textContent = `https://iphub.info/?ip=${encodeURIComponent(ip)}`;
 
   // Let the grid reflow before measuring, or the view lands at the old width.
   requestAnimationFrame(() => {
-    window.api.openViewer(url, viewerBounds()).then((response) => {
+    window.api.lookupInViewer(ip, viewerBounds()).then((response) => {
       if (response && !response.ok) toast(response.error, true);
     });
   });

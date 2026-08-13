@@ -224,15 +224,19 @@ ipcMain.handle('shell:open', (_event, url) => {
 
 /**
  * A manually-driven browser panel for looking up a single exit IP on
- * iphub.info without leaving the app. It is a viewer, not a scraper: the main
- * process never reads the page's DOM, and nothing is extracted back into the
- * results table. Navigation is pinned to iphub.info; any other host is handed
- * to the system browser.
+ * iphub.info without leaving the app. It is a viewer, not a scraper: nothing
+ * is read back out of the page or into the results table. The one thing we do
+ * touch is the site's own lookup form -- filling the IP and pressing Lookup,
+ * exactly what a person would do by hand -- so that clicking a second IP
+ * reuses the loaded page instead of reloading the whole site. Navigation is
+ * pinned to iphub.info; any other host is handed to the system browser.
  */
 let viewer = null;
 let viewerBounds = null;
 
 const VIEWER_HOST = 'iphub.info';
+const VIEWER_HOME = 'https://iphub.info/';
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
 function isIphubUrl(url) {
   try {
@@ -280,6 +284,12 @@ function ensureViewer() {
   );
   wc.on('did-navigate', (_event, url) => sendViewerState({ url }));
 
+  // The site pushes ?ip=<addr> into history itself after each lookup, so
+  // in-page navigation is how the URL changes once the page is warm.
+  wc.on('did-navigate-in-page', (_event, url) =>
+    sendViewerState({ url, canGoBack: wc.navigationHistory.canGoBack() })
+  );
+
   mainWindow.contentView.addChildView(viewer);
   if (viewerBounds) viewer.setBounds(viewerBounds);
   return viewer;
@@ -310,10 +320,78 @@ function destroyViewer() {
   viewer = null;
 }
 
-ipcMain.handle('viewer:open', (_event, { url, bounds }) => {
-  if (!isIphubUrl(url)) return { ok: false, error: 'Only iphub.info URLs open in the panel' };
+/**
+ * Drive the site's own lookup form: put the IP in the field and press Lookup.
+ * The field is disabled while a lookup is in flight and Alpine may not have
+ * wired the form up yet on a cold page, so this polls briefly before giving
+ * up and letting the caller fall back to a full navigation.
+ */
+function lookupFormScript(ip) {
+  return `(() => {
+    const ip = ${JSON.stringify(ip)};
+    const deadline = Date.now() + 4000;
+    return new Promise((resolve) => {
+      const attempt = () => {
+        const input = document.querySelector('#lookupInput');
+        const form = document.querySelector('#lookupForm') || (input && input.form);
+        const retry = (reason) =>
+          Date.now() < deadline ? setTimeout(attempt, 100) : resolve({ ok: false, reason });
+        if (!input || !form) return void retry('no-form');
+        if (input.disabled) return void retry('busy');
+
+        // Assign through the prototype setter so frameworks see a real change.
+        const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setValue.call(input, ip);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const button = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (button && !button.disabled) button.click();
+        else if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        resolve({ ok: true });
+      };
+      attempt();
+    });
+  })()`;
+}
+
+function whenIdle(wc) {
+  if (!wc.isLoading()) return Promise.resolve();
+  return new Promise((resolve) => wc.once('did-stop-loading', resolve));
+}
+
+/**
+ * One entry point for every IP click. The first click loads the site with
+ * ?ip=<addr>, which iphub reads on init and looks up on its own. Later clicks
+ * reuse that page via the form, so the panel no longer reloads each time.
+ */
+ipcMain.handle('viewer:lookup', async (_event, { ip, bounds }) => {
+  if (typeof ip !== 'string' || !IPV4.test(ip)) {
+    return { ok: false, error: 'Not a valid IPv4 address' };
+  }
   applyBounds(bounds);
-  ensureViewer().webContents.loadURL(url);
+
+  const warm = viewer && !viewer.webContents.isDestroyed();
+  const wc = ensureViewer().webContents;
+
+  if (warm) {
+    await whenIdle(wc);
+    if (isIphubUrl(wc.getURL())) {
+      try {
+        const result = await wc.executeJavaScript(lookupFormScript(ip), true);
+        if (result && result.ok) return { ok: true };
+      } catch {
+        // Page torn down or navigated mid-script; fall through to a reload.
+      }
+    }
+  }
+
+  try {
+    await wc.loadURL(`${VIEWER_HOME}?ip=${encodeURIComponent(ip)}`);
+  } catch {
+    return { ok: false, error: 'Could not reach iphub.info' };
+  }
   return { ok: true };
 });
 
