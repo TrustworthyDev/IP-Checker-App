@@ -15,6 +15,11 @@
   --accent: #4f8cff;
   --accent-hover: #6b9dff;
 
+  /* Visited exit IP. Deliberately violet rather than any verdict colour
+     below, so "already checked" can never be misread as a block score. */
+  --accent-seen: #b98cff;
+  --accent-seen-hover: #cbaaff;
+
   --good: #38d18a;
   --warn: #f5b544;
   --bad: #ff5f6d;
@@ -728,6 +733,19 @@ td.exit-ip-cell {
 td.exit-ip-cell:hover {
   color: var(--accent-hover);
   text-decoration-color: var(--accent-hover);
+}
+
+/* Read receipt: an IP you have sent to the panel stays tinted, so a long
+   run shows at a glance which addresses you have already inspected.
+   Must follow the :hover rule -- equal specificity, source order wins. */
+td.exit-ip-cell.is-seen {
+  color: var(--accent-seen);
+  text-decoration-color: #b98cff59;
+}
+
+td.exit-ip-cell.is-seen:hover {
+  color: var(--accent-seen-hover);
+  text-decoration-color: var(--accent-seen-hover);
 }
 
 .caret {

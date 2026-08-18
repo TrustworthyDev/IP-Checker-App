@@ -70,6 +70,9 @@ const state = {
   // Result ids whose detail panel is open. Survives re-renders from
   // filtering/searching, so an open row stays open.
   expanded: new Set(),
+  // Exit IPs already sent to the viewer. Keyed by address, not row id, so
+  // every row sharing an IP shows as seen, and it survives re-renders.
+  seenIps: new Set(),
 };
 
 /* ------------------------------------------------------------------ helpers */
@@ -392,6 +395,7 @@ function buildRow(result, index) {
     // Clicking the IP opens it in the iphub.info panel.
     ipTd.className = 'mono exit-ip-cell';
     ipTd.dataset.ip = result.exitIp;
+    if (state.seenIps.has(result.exitIp)) ipTd.classList.add('is-seen');
     ipTd.title = `Open ${result.exitIp} on iphub.info`;
     ipTd.textContent = result.exitIp;
     if (result.rotating) {
@@ -551,6 +555,7 @@ async function startCheck() {
   state.results = [];
   state.quotaWarned = false;
   state.expanded.clear();
+  state.seenIps.clear();
   render();
   setRunning(true);
   el.progressFill.style.width = '0%';
@@ -705,12 +710,22 @@ function viewerBounds() {
   return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
 }
 
+/** Tint every cell showing this IP, including rows built before the click. */
+function markSeen(ip) {
+  state.seenIps.add(ip);
+  for (const cell of el.resultsBody.querySelectorAll('td.exit-ip-cell')) {
+    if (cell.dataset.ip === ip) cell.classList.add('is-seen');
+  }
+}
+
 /**
  * Clicking an IP hands it to the panel. Only the first click pays for a page
  * load -- after that the main process types the address into iphub's own
  * lookup box and presses the button, so the panel stays put.
  */
 function openViewer(ip) {
+  markSeen(ip);
+
   const firstOpen = el.viewerPane.classList.contains('hidden');
 
   el.viewerPane.classList.remove('hidden');
@@ -825,6 +840,7 @@ el.btnClear.addEventListener('click', () => {
   el.proxyInput.value = '';
   state.results = [];
   state.expanded.clear();
+  state.seenIps.clear();
   refreshParse();
   render();
 });
